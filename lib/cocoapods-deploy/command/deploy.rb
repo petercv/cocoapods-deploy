@@ -102,18 +102,27 @@ module Pod
 
       # Installs required sources for lockfile - TODO: Simplify code
       def install_sources_for_lockfile
+        transformer = DeployTransformer.new(config.lockfile, config.sandbox)
+        
+        installed_sources = []
         config.lockfile.pod_names.each do |pod|
-          install_sources_for_pod(pod)
+          dep = transformer.transform_dependency_name(pod)
+          
+          unless installed_sources.include? dep.root_name
+            install_sources_for_pod(dep)
+            installed_sources << dep.root_name
+          end
         end
       end
 
       # Installs required sources for pod.
-      def install_sources_for_pod(pod)
-        transformer = DeployTransformer.new(config.lockfile, config.sandbox)
-        dep = transformer.transform_dependency_name(pod)
-
-        downloader = DeployDownloader.new(dep)
-        downloader.download(config)
+      def install_sources_for_pod(dep)
+        spec = config.sandbox.specification(dep.root_name)
+        
+        if spec.nil? || spec.checksum.nil? || spec.checksum != config.lockfile.checksum(dep.root_name)
+          downloader = DeployDownloader.new(dep)
+          downloader.download(config)
+        end
       end
 
       # Triggers the CocoaPods install process
